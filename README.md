@@ -6,7 +6,7 @@
 
 # External data files needed
 Although any video file of flowing fluid can be used with the coreect modifications
-* "IMGP9471.MOV" is a video file obtained from Professor Hubert Chanson and is protected under a non-disclosure agreement with this team. You will need to contact the Professor to obtain the necessary approvals to obtain his video file. If you have the file, place it in the root directory of this project.
+* IN this project a video file obtained from Professor Hubert Chanson and is protected under a non-disclosure agreement with this team. You will need to contact the Professor to obtain the necessary approvals to obtain his video file. If you have the file, place it in the root directory of this project.
 * "ideal.csv" is a manually created file containing ideal fluid calculations under theoretical ideal conditions provided by Professor Hubert Chanson, subject to the same agreement. This was manually extracted from the Professor's validation dataset into a simpler format. This file contains two columns headed with: "Depth m", "Velocity m/s" and then a series of float values respectively. This is also in the root directory of the project.
 
 

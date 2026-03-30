@@ -1,3 +1,14 @@
+## Fluid Dynamics Video Analysis Application
+
+📅 **Project period:** Jul-Nov 2025  
+🏫 **Context:** University of Queensland – DECO3801 / Studio 3 (Academic Project)  
+📤 **Repository published:** Feb 2026 (post-course cleanup & documentation)
+
+This project was developed earlier as part of coursework and is being published now 
+after refactoring, documentation, and removal of university-specific material.
+
+
+
 # Requirements
 
 * Python 3.11 or greater is recommended.
@@ -33,3 +44,12 @@ Although any video file of flowing fluid can be used with the coreect modificati
 * Select the y\_reference point at any point above the step where the stairs begin — do not select any lower, hit Enter.
 * Let the algorithm run and a physical depth map will appear, contour map and depth profile comparison between SFS depth and physical depth.
 * All these visualisations and a CSV of physical depth data then save down.
+
+## Project History
+
+- Initial prototype and experiments developed during university coursework
+- Core optical flow and shape-from-shading pipeline implemented earlier
+- Repository published later for portfolio purposes after:
+  - Code cleanup
+  - Documentation
+  - Removal of restricted datasets

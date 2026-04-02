@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.MOV
+*.mp4
+*.csv
+!ideal.csv
+*.png
+velocity_output.csv
+sfs_depth_heatmap.mp4
+physical_depth_heatmap.mp4

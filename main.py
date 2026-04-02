@@ -1,4 +1,4 @@
-import sys, csv, os
+import sys, csv, os, argparse
 import cv2
 import numpy as np
 import pandas as pd
@@ -23,15 +23,40 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 
-video_path = "IMGP9471.MOV"
-validation_path = "ideal.csv"
-output_path = "velocity_output.csv"
+def _parse_args():
+    parser = argparse.ArgumentParser(
+        description="Fluid dynamics velocity analysis from video using optical flow and SfS."
+    )
+    parser.add_argument("--video", default="IMGP9471.MOV",
+                        help="Path to the input video file (default: IMGP9471.MOV)")
+    parser.add_argument("--validation", default="ideal.csv",
+                        help="Path to the ideal/validation CSV (default: ideal.csv)")
+    parser.add_argument("--output", default="velocity_output.csv",
+                        help="Path for the output CSV (default: velocity_output.csv)")
+    parser.add_argument("--width-m", type=float, default=12.25,
+                        help="Known calibration width in metres (default: 12.25)")
+    parser.add_argument("--rotation", type=int, default=270,
+                        choices=[0, 90, 180, 270],
+                        help="Frame rotation angle in degrees (default: 270)")
+    return parser.parse_args()
+
+
+_args = _parse_args()
+
+video_path = _args.video
+validation_path = _args.validation
+output_path = _args.output
 
 num_regions = 2
 sfs_influences = [0.8, 0.7]
 penalty_factors = [1, 1]
-rotation_angle = 270
-known_width_m = 12.25
+rotation_angle = _args.rotation
+known_width_m = _args.width_m
+
+if not os.path.isfile(video_path):
+    print(f"Error: video file not found: {video_path}", file=sys.stderr)
+    print("Usage: python main.py --video /path/to/video.MOV", file=sys.stderr)
+    sys.exit(1)
 
 height_breaks = [544, 555, 579, 613, 648, 691, 731, 768, 813]
 height_scales = [25.84, 31.67, 35.84, 39.09, 42.89, 45.86, 48.28, 50.30, 51.34]

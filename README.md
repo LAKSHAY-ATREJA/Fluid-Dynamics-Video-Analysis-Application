@@ -1,212 +1,157 @@
-# Fluid Dynamics Video Analysis Application
+# Fluid Dynamics Video Analysis
 
-A desktop application for measuring water flow velocities from video footage.
-The system combines dense optical flow (Farneback method) with Shape-from-Shading
-(SfS) depth estimation to produce spatially calibrated velocity maps, vertical and
-horizontal flow profiles, per-pixel time series, and validation comparisons against
-ideal theoretical data.
+A research-oriented desktop application for estimating **image-plane motion**
+from video with dense optical flow. It originated in the University of
+Queensland DECO3801 studio project on dam-spillway footage and now separates a
+tested optical-flow baseline from dataset-specific experiments.
 
-Developed at the University of Queensland as part of DECO3801 / Studio 3 (2025),
-then refactored and published for portfolio use in 2026.
+This repository is not a certified flow meter. The public test data validates
+known 2D image translations, not turbulent-water physics, physical depth, or
+field accuracy.
 
+## Engineering focus
 
-## What it does
+- Dense Farneback optical flow behind a validated, reusable numerical API.
+- Explicit spatial calibration; the application no longer silently substitutes
+  a hard-coded metres-per-pixel value after failed calibration.
+- Deterministic synthetic benchmarks with known displacement and controlled
+  noise.
+- A real encoded-video demo that calculates endpoint and speed error against
+  ground truth.
+- Interactive ROI selection, velocity visualisation, CSV export, profiles and
+  time-series inspection.
+- Experimental Shape-from-Shading and dam-specific perspective corrections
+  remain available only through explicit command-line flags.
 
-Given a video of flowing water such as a dam spillway, the application:
-
-1. Calibrates spatial scale interactively from a known reference distance the
-   user marks by clicking two points on the first frame.
-2. Lets the user select up to two regions of interest with per-region gamma
-   correction to handle mixed clear-water and turbulent-water conditions.
-3. Computes per-frame dense optical flow (Farneback) within each region.
-4. Refines optical flow direction using SfS-derived surface normals to suppress
-   noise from specular reflections on the water surface.
-5. Converts pixel displacements to real-world velocity in metres per second
-   using camera perspective correction derived from the known dam geometry.
-6. Displays a live quiver plot overlaid on the video frame, showing flow
-   direction and magnitude with SfS alignment colour coding.
-7. Exports a depth-binned velocity CSV after the live loop ends.
-8. Launches an interactive Qt results viewer with heatmap overlays, switchable
-   colormaps, hover-to-inspect velocity readout, clickable vertical and
-   horizontal profiles, a per-pixel velocity time series, and a comparison
-   plot against the reference validation dataset.
-
-The SfS module can also be run standalone to produce depth heatmap videos,
-a contour map, a 3D depth surface render, and a depth-profile comparison image.
-
-
-## Project structure
-
-```
-main.py                  Main analysis pipeline: optical flow, SfS refinement, Qt viewer
-preprocessing.py         Shared image utilities: rotation, CLAHE, gamma, calibration, ROI
-SFSImplementation.py     Standalone Shape-from-Shading depth estimation pipeline
-demo.py                  Headless demonstration using a synthetic generated video
-requirements.txt         Python package dependencies
+```mermaid
+flowchart LR
+  V[Video frames] --> C[Explicit calibration]
+  C --> F[Dense optical flow]
+  F --> M[Planar speed estimate]
+  M --> U[Viewer and CSV]
+  F -. optional .-> S[Experimental SfS weighting]
+  S -. optional .-> P[Dam-specific correction]
 ```
 
+## Reproducible validation
 
-## Requirements
-
-- Python 3.11 or later
-- A video file of flowing fluid. The original dataset (dam spillway footage) is
-  protected under an NDA with Professor Hubert Chanson at the University of
-  Queensland. Contact the professor directly to request access. Any comparable
-  fluid-flow video can be substituted with parameter adjustments.
-- An optional validation CSV named `ideal.csv` with columns `Depth m` and
-  `Velocity m/s` for comparison against ideal-flow theoretical data.
-
-
-## Installation
-
-Clone the repository and install dependencies into a virtual environment:
+Create a virtual environment and install the application dependencies:
 
 ```bash
-git clone https://github.com/LAKSHAY-ATREJA/Fluid-Dynamics-Video-Analysis-Application.git
-cd Fluid-Dynamics-Video-Analysis-Application
-
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pip install -r requirements-ci.txt
 ```
 
-No API keys or environment variables are required.
-
-
-## Running the headless demo
-
-The demo generates a synthetic sinusoidal wave video, runs the optical flow and
-SfS pipeline without any GUI interaction, and writes three output files to the
-current directory:
+Run the checks:
 
 ```bash
-python demo.py
+python -m pytest -q
+python benchmark_optical_flow.py --check
+MPLBACKEND=Agg python demo.py
 ```
 
-Expected output:
+On 16 November 2026, the checked environment used OpenCV 5.0.0 and produced:
 
-```
-=== Fluid Dynamics Video Analysis — Headless Demo ===
+| Check | Observed result |
+|---|---:|
+| Unit and numerical tests | 7 passed |
+| Subpixel translation p95 endpoint error | 0.030 px |
+| 8 px translation p95 endpoint error | 0.038 px |
+| Noisy translation p95 endpoint error | 0.387 px |
+| Encoded-video demo p95 endpoint error | 0.417 px |
+| Encoded-video demo median speed error | 4.50% |
 
-[1/4] Generating synthetic fluid-flow video...
-Synthetic video written: demo_input.mp4  (60 frames at 25.0 fps)
-[2/4] Running optical flow and SfS depth estimation...
-  Processed frame 10/59
-  ...
-  Processed 59 frames total.
-[3/4] Saving velocity heatmap...
-  Saved: demo_velocity_heatmap.png
-[4/4] Saving velocity profile plot...
-  Saved: demo_velocity_profile.png
+The benchmark thresholds are encoded in source and enforced by CI. Results can
+vary with OpenCV versions, CPU implementations and video codecs, which is why
+the workflow reruns the measurements rather than relying on this table alone.
 
-=== Demo complete ===
-  Mean velocity (whole frame):  0.0341 m/s
-  99th percentile velocity:     0.1203 m/s
+The demo writes:
 
-Output files:
-  demo_input.mp4
-  demo_velocity_heatmap.png
-  demo_velocity_profile.png
-```
+- `demo_input.mp4`
+- `demo_velocity_heatmap.png`
+- `demo_velocity_profile.png`
+- `demo_metrics.json`
 
-The demo completes in roughly 30 to 90 seconds on a modern laptop, depending
-on CPU speed. No display server or Qt is needed.
+These generated files are ignored by Git.
 
+## Run the interactive application
 
-## Running the main analysis
+Install the full dependencies, then supply a video:
 
 ```bash
-python main.py --video /path/to/your_video.MOV
+python main.py --video /path/to/video.mp4 --rotation 0
 ```
 
-Command-line options:
-
-```
---video PATH       Path to the input video file (default: IMGP9471.MOV)
---validation PATH  Path to the reference validation CSV (default: ideal.csv)
---output PATH      Path for the exported velocity CSV (default: velocity_output.csv)
---width-m FLOAT    Known calibration width in metres (default: 12.25)
---rotation INT     Frame rotation angle: 0, 90, 180, or 270 (default: 270)
-```
-
-Interactive steps after the application opens:
-
-1. A calibration window shows the first frame. Click two points that span the
-   known real-world width (for example, the full width of a dam spillway) and
-   press Enter to confirm. Press Escape to skip and use the default estimate of
-   0.039 m/px.
-
-2. Draw the first ROI over the upper flow region by clicking and dragging, then
-   press Space or Enter to confirm.
-
-3. Adjust the gamma slider for the first ROI. For clear water with visible
-   sub-surface texture, values between 4.5 and 5.0 typically work well. Press
-   Enter to accept.
-
-4. Draw the second ROI over the lower or turbulent region and press Space or
-   Enter.
-
-5. Adjust gamma for the second ROI. For white-water turbulence where specular
-   reflections dominate, values between 0.55 and 0.65 typically reduce glare.
-   Press Enter to accept.
-
-6. The live quiver plot window shows optical flow vectors in real time. Red
-   arrows indicate flow aligned with the SfS downslope direction; orange arrows
-   indicate anti-aligned flow that has been partially suppressed. Press Q or
-   Escape to end the live loop and open the results viewer.
-
-The results viewer allows switching between JET, TURBO, and VIRIDIS colourmaps,
-toggling a 1 m scale bar, hovering over the heatmap to read instantaneous
-velocity at any pixel, clicking to pin a time series or a profile plot, and
-opening the validation comparison dialog if ideal.csv is present.
-
-
-## Running the SfS module standalone
+The application asks the user to mark a known distance. If calibration is
+cancelled, it stops without reporting a physical velocity. For a previously
+measured calibration:
 
 ```bash
-python SFSImplementation.py --video /path/to/your_video.MOV
+python main.py \
+  --video /path/to/video.mp4 \
+  --rotation 0 \
+  --metres-per-pixel 0.0025
 ```
 
-Optional argument:
+The value above is only an example; it must be measured for the actual camera
+and scene.
 
+Two original research experiments are opt-in:
+
+```bash
+python main.py \
+  --video /path/to/video.mp4 \
+  --experimental-sfs-refinement \
+  --dam-perspective-correction
 ```
---max-frames N    Maximum number of frames to process (default: all frames)
-```
 
-After processing, a calibration step requests four mouse-click points to define
-physical scale. The following files are then written to the current directory:
+The perspective table is specific to the original dam geometry. The SfS
+weighting assumes a Lambertian surface, fixed illumination and tuned
+regularisation. Neither option is covered by the public ground-truth benchmark,
+so neither is enabled by default.
 
-- `sfs_depth_heatmap.mp4` — per-frame SfS relative depth heatmap video
-- `physical_depth_heatmap.mp4` — physically scaled depth heatmap video
-- `physical_depth_contour_map.png` — contour map of average water depth over
-  the selected ROIs
-- `average_physical_depth_map.png` — 3D depth surface rendered in metres
-- `depth_profile_physical_vs_sfs.png` — horizontal depth profile from the last
-  processed frame comparing relative SfS units against physical metres
-- `physical_depth_map.csv` — full pixel-level depth map with X, Y, and depth
-  columns in metres
+## Repository structure
 
+| Path | Purpose |
+|---|---|
+| `flow_analysis.py` | Validated optical-flow and velocity primitives |
+| `benchmark_optical_flow.py` | Deterministic translation/noise benchmark |
+| `demo.py` | Encoded-video ground-truth demonstration |
+| `main.py` | Interactive analysis and PyQt results viewer |
+| `preprocessing.py` | Rotation, contrast, gamma and calibration tools |
+| `SFSImplementation.py` | Experimental standalone Shape-from-Shading pipeline |
+| `tests/` | Numerical and preprocessing tests |
+| `docs/adr/` | Architecture decisions and evidence boundaries |
 
-## Algorithm notes
+## Research data and limitations
 
-Optical flow uses cv2.calcOpticalFlowFarneback with a pyramid scale of 0.5,
-three pyramid levels, a window size of 15, and a Gaussian standard deviation of
-1.2. SfS depth estimation solves iteratively by gradient descent on the
-photometric error between observed intensity and the Lambertian reflectance
-model, with Laplacian smoothness regularisation. The depth map gradient defines
-a per-pixel downslope direction; the dot product of this direction with the
-optical flow unit vector weights the flow magnitude, suppressing motion that
-runs counter to the surface slope.
+The original spillway footage is not distributed because access is controlled
+by the University project stakeholders. The public synthetic inputs are
+deterministic and reproducible but do not reproduce turbulence, reflections,
+occlusion, camera vibration or depth-dependent perspective.
 
-Velocity is calculated as:
+Other limitations:
 
-    velocity (m/s) = optical_flow_magnitude (px/frame) * fps * mpp
+- Optical flow depends on visible texture and brightness consistency.
+- Metres-per-second output is only as accurate as the frame rate and spatial
+  calibration supplied by the user.
+- No uncertainty interval is yet propagated from calibration to velocity.
+- No public real-water dataset or independent sensor measurement is included.
+- Shape-from-Shading outputs are relative research estimates, not validated
+  physical depth.
+- The PyQt interface and original dataset workflow require visual/manual review;
+  CI covers the headless numerical path.
 
-where mpp is metres per pixel from the calibration step. Camera perspective is
-corrected using piecewise linear interpolation of view angles measured from the
-known dam geometry, applied row by row.
+## Project history
 
+Developed at the University of Queensland for DECO3801 / Studio 3 in 2025 and
+subsequently refactored for reproducible portfolio evidence. See
+[CHANGELOG.md](CHANGELOG.md) and
+[ADR 0001](docs/adr/0001-validated-baseline.md).
 
-## License
+## Licence
 
-MIT. Built by Lakshay Atreja.
+MIT — see [LICENSE](LICENSE).
+

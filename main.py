@@ -32,6 +32,7 @@ from preprocessing import (
     select_gamma_for_roi,
 )
 from SFSImplementation import forward_gradients, run_sfs_on_frame
+from flow_analysis import estimate_dense_flow, velocity_magnitude
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import Qt
@@ -82,6 +83,21 @@ def _parse_args():
         "--rotation", type=int, default=270,
         choices=[0, 90, 180, 270],
         help="Frame rotation angle in degrees (default: 270)",
+    )
+    parser.add_argument(
+        "--metres-per-pixel",
+        type=float,
+        help="Use an explicit positive spatial calibration instead of the click tool.",
+    )
+    parser.add_argument(
+        "--experimental-sfs-refinement",
+        action="store_true",
+        help="Enable the unvalidated SfS direction-weighting experiment.",
+    )
+    parser.add_argument(
+        "--dam-perspective-correction",
+        action="store_true",
+        help="Apply the original dataset-specific row-angle correction.",
     )
     return parser.parse_args()
 
@@ -868,6 +884,12 @@ def main():
     output_path = args.output
     rotation_angle = args.rotation
     known_width_m = args.width_m
+    if known_width_m <= 0:
+        print("Error: --width-m must be positive.", file=sys.stderr)
+        sys.exit(2)
+    if args.metres_per_pixel is not None and args.metres_per_pixel <= 0:
+        print("Error: --metres-per-pixel must be positive.", file=sys.stderr)
+        sys.exit(2)
 
     num_regions = 2
     sfs_influences = [0.8, 0.7]
@@ -899,12 +921,20 @@ def main():
     # ------------------------------------------------------------------
     # Spatial calibration
     # ------------------------------------------------------------------
-    rotated_for_cal = rotate_image(first_frame_raw.copy(), rotation_angle)
-    mpp = point_to_point(rotated_for_cal, known_metres=known_width_m)
-    if mpp is None:
-        print("Calibration cancelled or failed. Falling back to estimate 0.039 m/px.")
-        mpp = 0.039
+    if args.metres_per_pixel is not None:
+        mpp = args.metres_per_pixel
+        print(f"Using explicit calibration: {mpp:.8f} m/px")
     else:
+        rotated_for_cal = rotate_image(first_frame_raw.copy(), rotation_angle)
+        mpp = point_to_point(rotated_for_cal, known_metres=known_width_m)
+        if mpp is None:
+            print(
+                "Error: spatial calibration was cancelled or failed; "
+                "no physical velocity was calculated.",
+                file=sys.stderr,
+            )
+            video.release()
+            sys.exit(2)
         print(f"Calibration result: {mpp:.8f} m/px")
 
     # ------------------------------------------------------------------
@@ -969,37 +999,41 @@ def main():
             if roi_prev.size == 0 or roi_curr.size == 0:
                 continue
 
-            flow = cv2.calcOpticalFlowFarneback(
-                roi_prev, roi_curr, None, 0.5, 3, 15, 3, 5, 1.2, 0
+            flow = estimate_dense_flow(roi_prev, roi_curr)
+
+            if args.experimental_sfs_refinement:
+                sfs_float = roi_curr.astype(np.float32) / 255.0
+                z = run_sfs_on_frame(sfs_float, iters=30)
+                zx, zy = forward_gradients(z)
+                downslope = np.stack([-zx, -zy], axis=-1)
+                downslope /= (
+                    np.linalg.norm(downslope, axis=-1, keepdims=True) + 1e-8
+                )
+                flow_unit = flow / (
+                    np.linalg.norm(flow, axis=-1, keepdims=True) + 1e-8
+                )
+                alignment = np.sum(flow_unit * downslope, axis=-1)
+                penalty = penalty_factors[i]
+                raw_weights = np.clip((alignment + 1) / 2, 0, 1)
+                raw_weights[alignment < 0] *= 1 - penalty
+                influence = sfs_influences[i]
+                weights = 1.0 - influence * (1.0 - raw_weights)
+                flow = flow * weights[..., None]
+
+            velocity = velocity_magnitude(
+                flow,
+                frames_per_second=fps,
+                metres_per_pixel=mpp,
             )
 
-            # SfS-based flow refinement
-            sfs_float = roi_curr.astype(np.float32) / 255.0
-            z = run_sfs_on_frame(sfs_float, iters=30)
-            zx, zy = forward_gradients(z)
-            downslope = np.stack([-zx, -zy], axis=-1)
-            downslope /= np.linalg.norm(downslope, axis=-1, keepdims=True) + 1e-8
-
-            flow_unit = flow / (np.linalg.norm(flow, axis=-1, keepdims=True) + 1e-8)
-            alignment = np.sum(flow_unit * downslope, axis=-1)
-
-            penalty = penalty_factors[i]
-            raw_weights = np.clip((alignment + 1) / 2, 0, 1)
-            raw_weights[alignment < 0] *= (1 - penalty)
-            influence = sfs_influences[i]
-            weights = 1.0 - influence * (1.0 - raw_weights)
-            flow_refined = flow * weights[..., None]
-
-            fx, fy = flow_refined[..., 0], flow_refined[..., 1]
-            mag, _ = cv2.cartToPolar(fx, fy, angleInDegrees=True)
-            velocity = mag * fps * mpp
-
-            # Camera perspective correction
-            yy_coords = np.arange(ry, ry + rh)
-            row_angles_deg = np.interp(yy_coords, HEIGHT_BREAKS, HEIGHT_SCALES)
-            row_scales = np.sin(np.radians(row_angles_deg))
-            row_scales = np.where(row_scales < 1e-6, 1e-6, row_scales)
-            velocity /= row_scales[:, None]
+            if args.dam_perspective_correction:
+                yy_coords = np.arange(ry, ry + rh)
+                row_angles_deg = np.interp(
+                    yy_coords, HEIGHT_BREAKS, HEIGHT_SCALES
+                )
+                row_scales = np.sin(np.radians(row_angles_deg))
+                row_scales = np.where(row_scales < 1e-6, 1e-6, row_scales)
+                velocity /= row_scales[:, None]
 
             if velocity_sums[i] is None:
                 velocity_sums[i] = np.zeros_like(velocity, dtype=np.float32)
@@ -1163,3 +1197,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

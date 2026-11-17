@@ -96,7 +96,17 @@ python main.py \
 ```
 
 The value above is only an example; it must be measured for the actual camera
-and scene.
+and scene. The recording frame rate must also be valid. The app reads FPS from
+video metadata and **stops if metadata is zero, missing, or non-finite** rather
+than silently pretending the recording was 25 FPS. When metadata is known to
+be incorrect, provide a verified recording FPS explicitly:
+
+```bash
+python main.py --video /path/to/video.mp4 --rotation 0 \
+  --metres-per-pixel 0.0025 --fps 29.97
+```
+
+Do not guess FPS: an incorrect rate directly scales the reported velocity.
 
 Two original research experiments are opt-in:
 
@@ -138,6 +148,8 @@ Other limitations:
 - Metres-per-second output is only as accurate as the frame rate and spatial
   calibration supplied by the user.
 - No uncertainty interval is yet propagated from calibration to velocity.
+- An explicit FPS override is trusted when supplied; the software cannot
+  independently prove that the camera recorded at the claimed rate.
 - No public real-water dataset or independent sensor measurement is included.
 - Shape-from-Shading outputs are relative research estimates, not validated
   physical depth.

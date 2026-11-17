@@ -32,7 +32,7 @@ from preprocessing import (
     select_gamma_for_roi,
 )
 from SFSImplementation import forward_gradients, run_sfs_on_frame
-from flow_analysis import estimate_dense_flow, velocity_magnitude
+from flow_analysis import estimate_dense_flow, resolve_frame_rate, velocity_magnitude
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import Qt
@@ -88,6 +88,10 @@ def _parse_args():
         "--metres-per-pixel",
         type=float,
         help="Use an explicit positive spatial calibration instead of the click tool.",
+    )
+    parser.add_argument(
+        "--fps", type=float,
+        help="Measured recording FPS override; required when video metadata is invalid.",
     )
     parser.add_argument(
         "--experimental-sfs-refinement",
@@ -887,8 +891,15 @@ def main():
     if known_width_m <= 0:
         print("Error: --width-m must be positive.", file=sys.stderr)
         sys.exit(2)
-    if args.metres_per_pixel is not None and args.metres_per_pixel <= 0:
-        print("Error: --metres-per-pixel must be positive.", file=sys.stderr)
+    if args.metres_per_pixel is not None and (
+        not np.isfinite(args.metres_per_pixel) or args.metres_per_pixel <= 0
+    ):
+        print("Error: --metres-per-pixel must be finite and positive.", file=sys.stderr)
+        sys.exit(2)
+    if args.fps is not None and (
+        not np.isfinite(args.fps) or args.fps <= 0
+    ):
+        print("Error: --fps must be finite and positive.", file=sys.stderr)
         sys.exit(2)
 
     num_regions = 2
@@ -911,7 +922,16 @@ def main():
         print(f"Error: cannot open video: {video_path}", file=sys.stderr)
         sys.exit(1)
 
-    fps = video.get(cv2.CAP_PROP_FPS) or 25.0
+    try:
+        fps = resolve_frame_rate(
+            video.get(cv2.CAP_PROP_FPS), override_fps=args.fps
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        video.release()
+        sys.exit(2)
+    source = "explicit --fps override" if args.fps is not None else "video metadata"
+    print(f"Frame rate: {fps:.3f} FPS ({source})")
     ok, first_frame_raw = video.read()
     if not ok or first_frame_raw is None:
         print("Error: failed to read first frame.", file=sys.stderr)
@@ -927,7 +947,7 @@ def main():
     else:
         rotated_for_cal = rotate_image(first_frame_raw.copy(), rotation_angle)
         mpp = point_to_point(rotated_for_cal, known_metres=known_width_m)
-        if mpp is None:
+        if mpp is None or not np.isfinite(mpp) or mpp <= 0:
             print(
                 "Error: spatial calibration was cancelled or failed; "
                 "no physical velocity was calculated.",

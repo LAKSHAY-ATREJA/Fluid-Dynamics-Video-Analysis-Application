@@ -106,6 +106,22 @@ def translation_metrics(
     )
 
 
+def resolve_frame_rate(metadata_fps: float, *, override_fps: float | None = None) -> float:
+    """Use a verified frame rate; never invent a default for physical velocities.
+
+    The explicit override is useful for footage with broken/missing metadata,
+    but must come from a trusted recording source, not a guessed value.
+    """
+    fps = override_fps if override_fps is not None else metadata_fps
+    if fps is None or not np.isfinite(fps) or fps <= 0:
+        source = "--fps" if override_fps is not None else "video metadata"
+        raise ValueError(
+            f"{source} frame rate must be finite and positive; "
+            "supply a measured --fps value if video metadata is invalid"
+        )
+    return float(fps)
+
+
 def velocity_magnitude(
     flow: np.ndarray,
     *,

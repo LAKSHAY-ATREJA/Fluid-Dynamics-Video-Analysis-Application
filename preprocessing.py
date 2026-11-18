@@ -67,6 +67,42 @@ def apply_gamma_correction(img, gamma=1.3):
     return cv2.LUT(img, table)
 
 
+def prepare_flow_pair(previous_gray, current_gray, roi, *, gamma):
+    """Crop and identically preprocess consecutive grayscale frames for flow."""
+
+    if previous_gray is None or current_gray is None:
+        raise ValueError("frames must not be None")
+    if previous_gray.ndim != 2 or current_gray.ndim != 2:
+        raise ValueError("frames must be grayscale")
+    if previous_gray.dtype != np.uint8 or current_gray.dtype != np.uint8:
+        raise ValueError("frames must use uint8 pixels")
+    if previous_gray.shape != current_gray.shape:
+        raise ValueError("frames must have identical dimensions")
+    if len(roi) != 4:
+        raise ValueError("roi must contain x, y, width and height")
+
+    x, y, width, height = (int(value) for value in roi)
+    frame_height, frame_width = previous_gray.shape
+    if (
+        x < 0
+        or y < 0
+        or width <= 0
+        or height <= 0
+        or x + width > frame_width
+        or y + height > frame_height
+    ):
+        raise ValueError("roi must be a positive rectangle inside both frames")
+    if not np.isfinite(gamma) or gamma <= 0:
+        raise ValueError("gamma must be finite and positive")
+
+    previous_roi = previous_gray[y : y + height, x : x + width]
+    current_roi = current_gray[y : y + height, x : x + width]
+    return (
+        apply_gamma_correction(previous_roi, gamma),
+        apply_gamma_correction(current_roi, gamma),
+    )
+
+
 def point_to_point(frame0, known_metres=12.25, win="Calibrate", rotate=0):
     """
     Interactive two-click spatial calibration.
@@ -254,3 +290,4 @@ def select_gamma_for_roi(
 
     cv2.destroyWindow(window_name)
     return accepted_gamma
+

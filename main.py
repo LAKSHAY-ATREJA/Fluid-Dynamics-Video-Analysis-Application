@@ -29,6 +29,7 @@ from preprocessing import (
     apply_clahe,
     apply_gamma_correction,
     point_to_point,
+    prepare_flow_pair,
     select_gamma_for_roi,
 )
 from SFSImplementation import forward_gradients, run_sfs_on_frame
@@ -996,7 +997,6 @@ def main():
 
     prev_gray = cv2.cvtColor(first_frame, cv2.COLOR_BGR2GRAY)
     prev_gray = apply_clahe(prev_gray)
-    prev_gray = apply_gamma_correction(prev_gray, gammas[0])
 
     cv2.namedWindow("Optical Flow Quiver Plot")
 
@@ -1017,12 +1017,12 @@ def main():
         gray = apply_clahe(gray)
 
         for i, (rx, ry, rw, rh) in enumerate(rois):
-            roi_prev = prev_gray[ry : ry + rh, rx : rx + rw]
-            roi_curr = gray[ry : ry + rh, rx : rx + rw]
-            roi_curr = apply_gamma_correction(roi_curr, gammas[i])
-
-            if roi_prev.size == 0 or roi_curr.size == 0:
-                continue
+            roi_prev, roi_curr = prepare_flow_pair(
+                prev_gray,
+                gray,
+                (rx, ry, rw, rh),
+                gamma=gammas[i],
+            )
 
             flow = estimate_dense_flow(roi_prev, roi_curr)
 
@@ -1220,5 +1220,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 

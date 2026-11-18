@@ -20,6 +20,15 @@ class FarnebackConfig:
 
 
 @dataclass(frozen=True)
+class QuiverSample:
+    x: int
+    y: int
+    dx: int
+    dy: int
+    aligned: bool | None
+
+
+@dataclass(frozen=True)
 class TranslationMetrics:
     expected_dx_px: float
     expected_dy_px: float
@@ -122,6 +131,49 @@ def resolve_frame_rate(metadata_fps: float, *, override_fps: float | None = None
     return float(fps)
 
 
+def sample_quiver_vectors(
+    flow: np.ndarray,
+    *,
+    step: int = 12,
+    min_magnitude_px: float = 1.0,
+    alignment: np.ndarray | None = None,
+) -> list[QuiverSample]:
+    """Return deterministic vectors for display without assuming SfS data exists."""
+
+    if flow.ndim != 3 or flow.shape[2] != 2:
+        raise ValueError("flow must have shape (height, width, 2)")
+    if not np.all(np.isfinite(flow)):
+        raise ValueError("flow must contain only finite values")
+    if step <= 0:
+        raise ValueError("step must be positive")
+    if not np.isfinite(min_magnitude_px) or min_magnitude_px < 0:
+        raise ValueError("min_magnitude_px must be finite and non-negative")
+    if alignment is not None:
+        if alignment.shape != flow.shape[:2]:
+            raise ValueError("alignment must match the flow height and width")
+        if not np.all(np.isfinite(alignment)):
+            raise ValueError("alignment must contain only finite values")
+
+    threshold_squared = min_magnitude_px * min_magnitude_px
+    samples = []
+    for y in range(0, flow.shape[0], step):
+        for x in range(0, flow.shape[1], step):
+            dx = float(flow[y, x, 0])
+            dy = float(flow[y, x, 1])
+            if dx * dx + dy * dy <= threshold_squared:
+                continue
+            samples.append(
+                QuiverSample(
+                    x=x,
+                    y=y,
+                    dx=int(round(dx)),
+                    dy=int(round(dy)),
+                    aligned=None if alignment is None else bool(alignment[y, x] >= 0),
+                )
+            )
+    return samples
+
+
 def velocity_magnitude(
     flow: np.ndarray,
     *,
@@ -141,3 +193,4 @@ def velocity_magnitude(
         * frames_per_second
         * metres_per_pixel
     )
+

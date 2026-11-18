@@ -32,7 +32,12 @@ from preprocessing import (
     select_gamma_for_roi,
 )
 from SFSImplementation import forward_gradients, run_sfs_on_frame
-from flow_analysis import estimate_dense_flow, resolve_frame_rate, velocity_magnitude
+from flow_analysis import (
+    estimate_dense_flow,
+    resolve_frame_rate,
+    sample_quiver_vectors,
+    velocity_magnitude,
+)
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import Qt
@@ -1070,19 +1075,17 @@ def main():
                 cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2,
             )
 
-            step = 12
-            for yy in range(0, rh, step):
-                for xx in range(0, rw, step):
-                    dx = int(flow_refined[yy, xx, 0])
-                    dy = int(flow_refined[yy, xx, 1])
-                    if dx * dx + dy * dy > 1:
-                        color = (0, 0, 255) if alignment[yy, xx] >= 0 else (0, 165, 255)
-                        cv2.arrowedLine(
-                            frame,
-                            (rx + xx, ry + yy),
-                            (rx + xx + dx, ry + yy + dy),
-                            color, 1, tipLength=0.4,
-                        )
+            quiver_alignment = alignment if args.experimental_sfs_refinement else None
+            for sample in sample_quiver_vectors(
+                flow, step=12, alignment=quiver_alignment
+            ):
+                color = (0, 165, 255) if sample.aligned is False else (0, 0, 255)
+                cv2.arrowedLine(
+                    frame,
+                    (rx + sample.x, ry + sample.y),
+                    (rx + sample.x + sample.dx, ry + sample.y + sample.dy),
+                    color, 1, tipLength=0.4,
+                )
 
         display, _ = resize_to_screen(frame.copy())
         cv2.imshow("Optical Flow Quiver Plot", display)
@@ -1217,4 +1220,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

@@ -2,7 +2,13 @@ import numpy as np
 import pytest
 
 from benchmark_optical_flow import run_benchmark
-from flow_analysis import estimate_dense_flow, resolve_frame_rate, translation_metrics, velocity_magnitude
+from flow_analysis import (
+    estimate_dense_flow,
+    resolve_frame_rate,
+    sample_quiver_vectors,
+    translation_metrics,
+    velocity_magnitude,
+)
 
 
 def test_known_translation_benchmark_meets_declared_thresholds():
@@ -61,3 +67,29 @@ def test_missing_or_invalid_video_fps_is_never_silently_guessed(invalid):
 def test_invalid_explicit_fps_override_is_rejected_even_with_good_metadata(invalid):
     with pytest.raises(ValueError, match="--fps frame rate"):
         resolve_frame_rate(25.0, override_fps=invalid)
+
+
+
+def test_quiver_sampling_works_without_experimental_alignment():
+    flow = np.zeros((24, 24, 2), dtype=np.float32)
+    flow[0, 0] = [2.4, -1.6]
+    samples = sample_quiver_vectors(flow, step=12)
+    assert len(samples) == 1
+    sample = samples[0]
+    assert (sample.x, sample.y, sample.dx, sample.dy) == (0, 0, 2, -2)
+    assert sample.aligned is None
+
+
+def test_quiver_sampling_preserves_optional_alignment_and_validates_shape():
+    flow = np.zeros((24, 24, 2), dtype=np.float32)
+    flow[12, 12] = [3.0, 0.0]
+    alignment = np.ones((24, 24), dtype=np.float32)
+    alignment[12, 12] = -0.25
+
+    samples = sample_quiver_vectors(flow, step=12, alignment=alignment)
+    assert len(samples) == 1
+    assert samples[0].aligned is False
+
+    with pytest.raises(ValueError, match="match the flow"):
+        sample_quiver_vectors(flow, alignment=np.zeros((12, 12)))
+

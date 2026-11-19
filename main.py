@@ -27,7 +27,6 @@ from preprocessing import (
     rotate_image,
     resize_to_screen,
     apply_clahe,
-    apply_gamma_correction,
     point_to_point,
     prepare_flow_pair,
     select_gamma_for_roi,
@@ -38,6 +37,10 @@ from flow_analysis import (
     resolve_frame_rate,
     sample_quiver_vectors,
     velocity_magnitude,
+)
+from velocity_aggregation import (
+    compute_measured_vertical_profile,
+    get_avg_velocity,
 )
 
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -814,75 +817,6 @@ class ResultsViewer(QMainWindow):
 
 
 # ===========================================================================
-# Velocity aggregation
-# ===========================================================================
-
-def get_avg_velocity(velocity_sums, frame_counts, rois, mpp, increment_m=1.0):
-    """
-    Aggregate frame-averaged velocity maps into 1 m depth-bin averages.
-
-    Returns a dict mapping ``depth_bin_start (m)`` to
-    ``{"Velocity m/s": float}``.
-    """
-    height_data = {}
-    current_height_m = 0.0
-
-    for i, (rx, ry, rw, rh) in enumerate(rois):
-        avg_velocity_map = velocity_sums[i] / max(1, frame_counts[i])
-        roi_height_m = rh * mpp
-        num_increments = int(np.floor(roi_height_m / increment_m))
-
-        for inc in range(num_increments):
-            start_y_m = current_height_m + inc * increment_m
-            end_y_m = start_y_m + increment_m
-            start_y_px = int((start_y_m - current_height_m) / mpp)
-            end_y_px = int((end_y_m - current_height_m) / mpp)
-
-            if start_y_px >= rh:
-                break
-            end_y_px = min(end_y_px, rh)
-
-            region_velocity = avg_velocity_map[start_y_px:end_y_px, :]
-            avg_vel = float(np.mean(region_velocity))
-            height_key = round(start_y_m, 1)
-
-            if height_key not in height_data:
-                height_data[height_key] = {"Velocity m/s": avg_vel}
-            else:
-                height_data[height_key]["Velocity m/s"] = max(
-                    height_data[height_key]["Velocity m/s"], avg_vel
-                )
-
-        current_height_m += roi_height_m
-
-    return height_data
-
-
-def compute_measured_vertical_profile(avg_maps, rois, mpp):
-    """
-    Compute the depth-averaged vertical velocity profile across all ROIs.
-
-    Returns ``(depth_m, velocity_mps)`` — parallel 1-D arrays sorted by
-    ascending depth.
-    """
-    rows = {}
-    for (rx, ry, rw, rh), amap in zip(rois, avg_maps):
-        if amap.size == 0:
-            continue
-        for r in range(rh):
-            y_abs = ry + r
-            if y_abs not in rows:
-                rows[y_abs] = []
-            rows[y_abs].append(float(np.nanmean(amap[r, :])))
-    if not rows:
-        return np.array([]), np.array([])
-    y_sorted = sorted(rows.keys())
-    vel_avg = np.array([np.nanmean(rows[yy]) for yy in y_sorted], dtype=float)
-    depth_m = np.array(y_sorted, dtype=float) * float(mpp)
-    return depth_m, vel_avg
-
-
-# ===========================================================================
 # Main entry point
 # ===========================================================================
 
@@ -1124,7 +1058,7 @@ def main():
     all_vals = []
     for i, (rx, ry, rw, rh) in enumerate(rois):
         if frame_counts[i] == 0:
-            amap = np.zeros((rh, rw), dtype=np.float32)
+            amap = np.empty((0, 0), dtype=np.float32)
         else:
             amap = velocity_sums[i] / float(frame_counts[i])
         avg_maps.append(amap)

@@ -108,6 +108,12 @@ python main.py --video /path/to/video.mp4 --rotation 0 \
 
 Do not guess FPS: an incorrect rate directly scales the reported velocity.
 
+The exported CSV uses the full-frame image row as its depth origin:
+`depth = image_row × metres_per_pixel`. One-metre bins include partial bins,
+omit ROIs with no processed frames, and combine overlapping ROIs by weighting
+every observed pixel equally. This makes the export reproducible, but it does
+not turn image-plane depth into a surveyed world coordinate.
+
 Two original research experiments are opt-in:
 
 ```bash
@@ -131,6 +137,7 @@ so neither is enabled by default.
 | `demo.py` | Encoded-video ground-truth demonstration |
 | `main.py` | Interactive analysis and PyQt results viewer |
 | `preprocessing.py` | Rotation, contrast, gamma and calibration tools |
+| `velocity_aggregation.py` | Geometry-aware depth-bin and vertical-profile aggregation |
 | `SFSImplementation.py` | Experimental standalone Shape-from-Shading pipeline |
 | `tests/` | Numerical and preprocessing tests |
 | `docs/adr/` | Architecture decisions and evidence boundaries |
@@ -166,4 +173,5 @@ subsequently refactored for reproducible portfolio evidence. See
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
+
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-19
+
+- Replaced sequential ROI stacking with depth bins derived from actual
+  full-frame row coordinates.
+- Retained partial bins, omitted unobserved ROIs, and combined overlapping
+  regions with per-pixel weighting instead of selecting the maximum mean.
+- Added headless tests for aggregation geometry, overlaps, gaps and invalid
+  inputs.
+
 ## 2026-11-18
 
 - Rejected invalid or missing recording frame rates instead of silently

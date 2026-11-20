@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-20
+
+- Prevented the results viewer's profile and histogram labels from being
+  clipped when the plot panel is narrower than Matplotlib's initial size.
+- Added an offscreen Qt render regression test for the default results-panel
+  dimensions and populated profile data.
+
 ## 2026-11-19
 
 - Replaced sequential ROI stacking with depth bins derived from actual

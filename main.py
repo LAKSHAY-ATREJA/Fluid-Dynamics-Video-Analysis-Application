@@ -207,7 +207,7 @@ class LivePlot(FigureCanvas):
         self.mode = "timeseries"
         self.fps = float(fps)
         self.mpp = float(mpp)
-        fig = Figure(figsize=(6.2, 4.2), dpi=110)
+        fig = Figure(figsize=(6.2, 4.2), dpi=110, layout="constrained")
         super().__init__(fig)
         self.ax_main = None
         self.ax_hist = None
@@ -240,7 +240,6 @@ class LivePlot(FigureCanvas):
             self.ax_main = None
             self.ax_hist = self.figure.add_subplot(111)
         self._init_axes_labels()
-        self.figure.tight_layout()
         self.draw_idle()
 
     def _init_axes_labels(self):
@@ -270,7 +269,6 @@ class LivePlot(FigureCanvas):
             self.ax_hist.set_xlabel("Velocity (m/s)")
             self.ax_hist.set_ylabel("Count")
             self.ax_hist.tick_params(axis="both", labelsize=14)
-        self.figure.tight_layout()
 
     def _plot_hist(self, values):
         if self.ax_hist is None:
@@ -286,7 +284,6 @@ class LivePlot(FigureCanvas):
             width = (bin_edges[1] - bin_edges[0]) if len(bin_edges) > 1 else 1.0
             self.ax_hist.bar(centers, counts, width=width)
         self.ax_hist.tick_params(axis="both", labelsize=14)
-        self.figure.tight_layout()
         self.draw_idle()
 
     def update_series(self, vel_series_mps):
@@ -295,7 +292,8 @@ class LivePlot(FigureCanvas):
         if self.ax_main is not None:
             xs = np.arange(len(ys), dtype=float) / max(1.0, self.fps)
             self.line_main.set_data(xs, ys)
-            self.ax_main.set_xlim(0, xs[-1] if len(xs) else 1)
+            xmax = xs[-1] if len(xs) and xs[-1] > 0 else 1.0
+            self.ax_main.set_xlim(0, xmax * 1.05)
             ymax = max(1e-6, max(ys) if ys else 1.0)
             self.ax_main.set_ylim(0, ymax * 1.2)
         self._plot_hist(ys)
@@ -308,7 +306,8 @@ class LivePlot(FigureCanvas):
             n = len(ys)
             xs = (np.arange(pixel_len, dtype=float)[:n] * self.mpp) if n else []
             self.line_main.set_data(xs, ys)
-            self.ax_main.set_xlim(0, xs[-1] if len(xs) else 1)
+            xmax = xs[-1] if len(xs) and xs[-1] > 0 else 1.0
+            self.ax_main.set_xlim(0, xmax * 1.05)
             ymax = max(1e-6, max(ys) if ys else 1.0)
             self.ax_main.set_ylim(0, ymax * 1.2)
         self._plot_hist(ys)

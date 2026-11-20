@@ -160,8 +160,9 @@ Other limitations:
 - No public real-water dataset or independent sensor measurement is included.
 - Shape-from-Shading outputs are relative research estimates, not validated
   physical depth.
-- The PyQt interface and original dataset workflow require visual/manual review;
-  CI covers the headless numerical path.
+- CI renders the populated Qt/Matplotlib results plot offscreen and checks its
+  labels at the default panel size. ROI selection, hover/click interaction and
+  the original dataset workflow still require visual/manual review.
 
 ## Project history
 

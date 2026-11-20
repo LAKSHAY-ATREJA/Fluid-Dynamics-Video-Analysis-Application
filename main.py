@@ -26,10 +26,12 @@ import matplotlib as mpl
 from preprocessing import (
     rotate_image,
     resize_to_screen,
+    map_roi_to_frame,
     apply_clahe,
     point_to_point,
     prepare_flow_pair,
     select_gamma_for_roi,
+    validate_selected_gamma,
 )
 from SFSImplementation import forward_gradients, run_sfs_on_frame
 from flow_analysis import (
@@ -907,13 +909,19 @@ def main():
     for i in range(num_regions):
         roi_sel = cv2.selectROI(f"Select ROI {i + 1}", resized, showCrosshair=True)
         rx, ry, rw, rh = roi_sel
-        # Store ROI in full-resolution coordinates
-        rois.append((int(rx / scale), int(ry / scale), int(rw / scale), int(rh / scale)))
-        gsel = select_gamma_for_roi(
-            resized, (rx, ry, rw, rh),
-            initial_gamma=1.0, window_name=f"Gamma ROI {i + 1}",
-        )
-        gammas.append(1.0 if gsel is None else float(gsel))
+        try:
+            # Store a validated ROI in full-resolution coordinates.
+            rois.append(map_roi_to_frame(roi_sel, scale, rotated_for_roi.shape))
+            gsel = select_gamma_for_roi(
+                resized, (rx, ry, rw, rh),
+                initial_gamma=1.0, window_name=f"Gamma ROI {i + 1}",
+            )
+            gammas.append(validate_selected_gamma(gsel))
+        except ValueError as exc:
+            print(f"Error: ROI {i + 1}: {exc}.", file=sys.stderr)
+            video.release()
+            cv2.destroyAllWindows()
+            sys.exit(2)
 
     cv2.destroyAllWindows()
 

@@ -3,9 +3,11 @@ import pytest
 
 from preprocessing import (
     apply_gamma_correction,
+    map_roi_to_frame,
     prepare_flow_pair,
     resize_to_screen,
     rotate_image,
+    validate_selected_gamma,
 )
 
 
@@ -25,6 +27,36 @@ def test_resize_to_screen_preserves_aspect_ratio():
 def test_resize_to_screen_rejects_empty_image():
     with pytest.raises(ValueError):
         resize_to_screen(np.array([], dtype=np.uint8))
+
+
+def test_map_roi_to_frame_preserves_selected_extent_when_scaled():
+    assert map_roi_to_frame((10, 20, 31, 40), 0.5, (200, 300, 3)) == (
+        20, 40, 62, 80
+    )
+
+
+@pytest.mark.parametrize(
+    ("selection", "message"),
+    [
+        ((0, 0, 0, 0), "cancelled or empty"),
+        ((-1, 0, 5, 5), "cancelled or empty"),
+        ((95, 10, 10, 10), "inside the source frame"),
+        ((0, 0, np.nan, 5), "finite"),
+    ],
+)
+def test_map_roi_to_frame_rejects_invalid_selections(selection, message):
+    with pytest.raises(ValueError, match=message):
+        map_roi_to_frame(selection, 1.0, (100, 100, 3))
+
+
+def test_validate_selected_gamma_rejects_cancel_and_invalid_values():
+    with pytest.raises(ValueError, match="cancelled"):
+        validate_selected_gamma(None)
+    with pytest.raises(ValueError, match="finite and positive"):
+        validate_selected_gamma(float("inf"))
+    with pytest.raises(ValueError, match="finite and positive"):
+        validate_selected_gamma(0)
+    assert validate_selected_gamma(1.25) == pytest.approx(1.25)
 
 
 def test_gamma_correction_preserves_shape_and_dtype():

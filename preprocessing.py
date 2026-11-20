@@ -37,6 +37,52 @@ def resize_to_screen(img, screen_res=(1280, 720)):
     return cv2.resize(img, new_size), scale
 
 
+def map_roi_to_frame(roi_resized, scale, frame_shape):
+    """Map a screen-sized ROI to a validated full-resolution rectangle.
+
+    ``cv2.selectROI`` returns an all-zero rectangle when the user cancels.
+    Treat that outcome, non-finite coordinates and rectangles outside the
+    rotated source frame as errors before optical-flow processing starts.
+    """
+    if len(roi_resized) != 4:
+        raise ValueError("ROI must contain x, y, width and height")
+    if not np.isfinite(scale) or scale <= 0:
+        raise ValueError("display scale must be finite and positive")
+    if len(frame_shape) < 2:
+        raise ValueError("frame shape must contain height and width")
+
+    frame_height, frame_width = (int(frame_shape[0]), int(frame_shape[1]))
+    if frame_height <= 0 or frame_width <= 0:
+        raise ValueError("frame dimensions must be positive")
+
+    values = np.asarray(roi_resized, dtype=float)
+    if not np.all(np.isfinite(values)):
+        raise ValueError("ROI coordinates must be finite")
+    x, y, width, height = values
+    if x < 0 or y < 0 or width <= 0 or height <= 0:
+        raise ValueError("ROI selection was cancelled or empty")
+
+    x0 = int(np.floor(x / scale))
+    y0 = int(np.floor(y / scale))
+    x1 = int(np.ceil((x + width) / scale))
+    y1 = int(np.ceil((y + height) / scale))
+    if x0 < 0 or y0 < 0 or x1 > frame_width or y1 > frame_height:
+        raise ValueError("ROI must be inside the source frame")
+    if x1 <= x0 or y1 <= y0:
+        raise ValueError("ROI selection maps to an empty source rectangle")
+    return x0, y0, x1 - x0, y1 - y0
+
+
+def validate_selected_gamma(value):
+    """Return an accepted gamma value or reject cancellation/invalid input."""
+    if value is None:
+        raise ValueError("gamma selection was cancelled")
+    gamma = float(value)
+    if not np.isfinite(gamma) or gamma <= 0:
+        raise ValueError("selected gamma must be finite and positive")
+    return gamma
+
+
 def apply_clahe(img):
     """Apply CLAHE contrast-limited adaptive histogram equalization to *img*."""
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))

@@ -6,6 +6,8 @@
   clipped when the plot panel is narrower than Matplotlib's initial size.
 - Added an offscreen Qt render regression test for the default results-panel
   dimensions and populated profile data.
+- Rejected cancelled, empty, non-finite and out-of-frame ROI selections before
+  optical-flow processing, and made gamma-selection cancellation stop cleanly.
 
 ## 2026-11-19
 

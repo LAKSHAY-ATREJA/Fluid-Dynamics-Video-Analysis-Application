@@ -95,6 +95,9 @@ python main.py \
   --metres-per-pixel 0.0025
 ```
 
+Cancelling either ROI or gamma selection also stops before processing or CSV
+export; an empty selection is never passed into OpenCV's optical-flow engine.
+
 The value above is only an example; it must be measured for the actual camera
 and scene. The recording frame rate must also be valid. The app reads FPS from
 video metadata and **stops if metadata is zero, missing, or non-finite** rather
